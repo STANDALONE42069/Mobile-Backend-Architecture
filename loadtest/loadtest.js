@@ -52,15 +52,19 @@ export function readProducts() {
 export function createOrder(data) {
   const userIndex = exec.scenario.iterationInTest;
   const token = data.tokens[userIndex];
-  const response = http.post(`${BASE_URL}/api/v1/orders`, JSON.stringify({ productId: 'p-1001' }), {
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-  });
-  check(response, { 'order queued': (r) => r.status === 202 });
-
-  if (userIndex < 50) {
-    const duplicate = http.post(`${BASE_URL}/api/v1/orders`, JSON.stringify({ productId: 'p-1001' }), {
+  const requestCount = userIndex < 25 ? 3 : userIndex < 50 ? 2 : 1;
+  const requests = Array.from({ length: requestCount }, () => ({
+    method: 'POST',
+    url: `${BASE_URL}/api/v1/orders`,
+    body: JSON.stringify({ productId: 'p-1001' }),
+    params: {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    });
-    check(duplicate, { 'duplicate rejected': (r) => r.status === 409 });
-  }
+    },
+  }));
+  const responses = http.batch(requests);
+
+  check(responses, {
+    'exactly one order queued per user': (items) => items.filter((r) => r.status === 202).length === 1,
+    'all duplicate requests rejected': (items) => items.filter((r) => r.status === 409).length === requestCount - 1,
+  });
 }
