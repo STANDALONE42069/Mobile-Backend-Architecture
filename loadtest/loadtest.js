@@ -1,6 +1,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { expectedStatuses } from 'k6/http';
+import exec from 'k6/execution';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 http.setResponseCallback(expectedStatuses(200, 202, 409));
@@ -49,13 +50,14 @@ export function readProducts() {
 }
 
 export function createOrder(data) {
-  const token = data.tokens[__VU - 1];
+  const userIndex = exec.scenario.iterationInTest;
+  const token = data.tokens[userIndex];
   const response = http.post(`${BASE_URL}/api/v1/orders`, JSON.stringify({ productId: 'p-1001' }), {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   });
   check(response, { 'order queued': (r) => r.status === 202 });
 
-  if (__VU <= 50) {
+  if (userIndex < 50) {
     const duplicate = http.post(`${BASE_URL}/api/v1/orders`, JSON.stringify({ productId: 'p-1001' }), {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     });
