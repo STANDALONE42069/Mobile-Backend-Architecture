@@ -60,6 +60,12 @@ curl -X POST http://localhost:8080/api/v1/orders \
 k6 run loadtest/loadtest.js
 ```
 
+รันเฉพาะ Read Load ด้วย 1,000 concurrent users โดยเลือกหน้าและขนาดหน้าได้:
+
+```bash
+k6 run -e PAGE=1 -e LIMIT=10 loadtest/read-load.js
+```
+
 ตรวจ data integrity หลัง queue ทำงานเสร็จ:
 
 ```bash
