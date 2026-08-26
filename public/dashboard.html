@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flash Sale Operations Dashboard</title>
+  <style>
+    :root { color-scheme:dark; --bg:#08111f; --panel:#101c2f; --line:#263752; --text:#e8efff; --muted:#94a7c6; --green:#3ddc97; --red:#ff6b7a; --blue:#63a7ff; --yellow:#ffcc66; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at top left,#15294a 0,#08111f 42%); color:var(--text); font-family:Inter,Segoe UI,sans-serif; min-height:100vh; }
+    main { width:min(1440px,94vw); margin:0 auto; padding:28px 0 48px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:22px; }
+    h1 { margin:0; font-size:clamp(24px,3vw,38px); letter-spacing:-.03em; }
+    h2 { margin:0 0 14px; font-size:17px; color:#c8d7f2; }
+    .subtitle,.updated { color:var(--muted); font-size:13px; margin-top:6px; }
+    .nav { display:flex; gap:10px; }
+    .button { color:var(--text); text-decoration:none; background:#182943; border:1px solid #385176; border-radius:10px; padding:10px 14px; font-weight:600; }
+    .grid { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; }
+    .panel { background:linear-gradient(155deg,rgba(18,33,55,.96),rgba(12,23,40,.96)); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 16px 40px rgba(0,0,0,.2); }
+    .span-4 { grid-column:span 4; } .span-6 { grid-column:span 6; }
+    .metric-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .metric { background:#0b1628; border:1px solid #21324c; border-radius:12px; padding:13px; min-height:82px; }
+    .label { color:var(--muted); font-size:12px; margin-bottom:8px; }
+    .value { font-size:24px; font-weight:750; letter-spacing:-.03em; }
+    .unit { color:var(--muted); font-size:12px; margin-left:4px; }
+    .green { color:var(--green); } .red { color:var(--red); } .blue { color:var(--blue); } .yellow { color:var(--yellow); }
+    .bar { height:12px; background:#091423; border-radius:99px; overflow:hidden; margin:18px 0 9px; border:1px solid #253650; }
+    .bar > div { height:100%; width:0; background:linear-gradient(90deg,#38c98a,#68f0b2); transition:width .35s ease; }
+    .ratio-row { display:flex; justify-content:space-between; color:var(--muted); font-size:12px; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:11px 10px; border-bottom:1px solid #25344d; text-align:left; font-size:13px; }
+    th { color:var(--muted); font-weight:600; }
+    .status { display:inline-flex; align-items:center; gap:7px; font-weight:700; margin-left:6px; }
+    .dot { width:9px; height:9px; border-radius:50%; background:currentColor; box-shadow:0 0 12px currentColor; }
+    .empty { color:var(--muted); padding:28px 0; text-align:center; grid-column:1/-1; }
+    @media(max-width:980px){ .span-4,.span-6{grid-column:span 12}.metric-grid{grid-template-columns:repeat(2,1fr)} header{align-items:flex-start;flex-direction:column} }
+    @media(max-width:560px){ .metric-grid{grid-template-columns:1fr}.nav{flex-wrap:wrap} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Flash Sale Operations Dashboard</h1>
+      <div class="subtitle">Cache, BullMQ, k6 performance และ Data Integrity Proof</div>
+      <div class="updated" id="updated">กำลังโหลดข้อมูล…</div>
+    </div>
+    <nav class="nav">
+      <a class="button" href="/admin/queues">เปิด Bull Board</a>
+      <a class="button" href="/api/dashboard">ดู JSON API</a>
+    </nav>
+  </header>
+
+  <div class="grid">
+    <section class="panel span-4">
+      <h2>Cache Performance</h2>
+      <div class="metric-grid">
+        <div class="metric"><div class="label">Cache Hits</div><div class="value green" id="hits">—</div></div>
+        <div class="metric"><div class="label">Cache Misses</div><div class="value yellow" id="misses">—</div></div>
+        <div class="metric"><div class="label">Hit Ratio</div><div class="value blue" id="hitRatio">—</div></div>
+      </div>
+      <div class="bar"><div id="hitBar"></div></div>
+      <div class="ratio-row"><span>Miss <b id="missRatio">—</b></span><span>Total <b id="cacheTotal">—</b></span></div>
+    </section>
+
+    <section class="panel span-4">
+      <h2>BullMQ Queue</h2>
+      <div class="metric-grid">
+        <div class="metric"><div class="label">Waiting</div><div class="value yellow" id="waiting">—</div></div>
+        <div class="metric"><div class="label">Active</div><div class="value blue" id="active">—</div></div>
+        <div class="metric"><div class="label">Workers</div><div class="value" id="workers">—</div></div>
+        <div class="metric"><div class="label">Completed</div><div class="value green" id="completed">—</div></div>
+        <div class="metric"><div class="label">Failed</div><div class="value red" id="failed">—</div></div>
+        <div class="metric"><div class="label">Delayed</div><div class="value" id="delayed">—</div></div>
+      </div>
+    </section>
+
+    <section class="panel span-4">
+      <h2>Data Integrity Proof</h2>
+      <table><tbody>
+        <tr><th>Product</th><td id="productId">—</td></tr>
+        <tr><th>Remaining Stock</th><td id="remainingStock">—</td></tr>
+        <tr><th>No Negative Stock</th><td id="noNegative">—</td></tr>
+        <tr><th>Total Orders</th><td id="totalOrders">—</td></tr>
+        <tr><th>Unique Users</th><td id="uniqueUsers">—</td></tr>
+        <tr><th>Max / User</th><td id="maxPerUser">—</td></tr>
+        <tr><th>Duplicate Users</th><td id="duplicateUsers">—</td></tr>
+      </tbody></table>
+    </section>
+
+    <section class="panel span-6"><h2>k6 Read Load — 1,000 Concurrent Users</h2><div id="readMetrics" class="metric-grid"></div></section>
+    <section class="panel span-6"><h2>k6 Write Load — 500 Unique Users</h2><div id="writeMetrics" class="metric-grid"></div></section>
+  </div>
+</main>
+
+<script>
+  const number = value => Number(value || 0).toLocaleString('en-US', { maximumFractionDigits:2 });
+  const percent = value => `${(Number(value || 0) * 100).toFixed(3)}%`;
+  const status = (pass, passText='PASS', failText='FAIL') => `<span class="status ${pass?'green':'red'}"><span class="dot"></span>${pass?passText:failText}</span>`;
+  const metric = (label, value, unit='', color='') => `<div class="metric"><div class="label">${label}</div><div class="value ${color}">${value}<span class="unit">${unit}</span></div></div>`;
+
+  function renderLoadTest(target, test) {
+    const element = document.getElementById(target);
+    if (!test) { element.innerHTML='<div class="empty">ยังไม่มีผลทดสอบ กรุณารัน k6 script</div>'; return; }
+    const threshold = test.testType === 'read' ? 200 : 300;
+    element.innerHTML = [
+      metric('Requests',number(test.requests)),
+      metric('Throughput',number(test.requestsPerSecond),'req/s','blue'),
+      metric('p95 Latency',number(test.p95LatencyMs),'ms',Number(test.p95LatencyMs)<threshold?'green':'yellow'),
+      metric('Average Latency',number(test.averageLatencyMs),'ms'),
+      metric('Error Rate',percent(test.errorRate),'',Number(test.errorRate)<.01?'green':'red'),
+      metric('Checks Failed',number(test.checksFailed),'',Number(test.checksFailed)===0?'green':'red'),
+    ].join('');
+  }
+
+  async function refresh() {
+    try {
+      const response=await fetch('/api/dashboard',{cache:'no-store'});
+      if(!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data=await response.json(), cache=data.cache, queue=data.queue, proof=data.dataIntegrity;
+      document.getElementById('hits').textContent=number(cache.hits);
+      document.getElementById('misses').textContent=number(cache.misses);
+      document.getElementById('hitRatio').textContent=percent(cache.hitRatio);
+      document.getElementById('missRatio').textContent=percent(cache.missRatio);
+      document.getElementById('cacheTotal').textContent=number(cache.total);
+      document.getElementById('hitBar').style.width=`${Math.min(100,cache.hitRatio*100)}%`;
+      for(const key of ['waiting','active','workers','completed','failed','delayed']) document.getElementById(key).textContent=number(queue[key]);
+      if(proof){
+        document.getElementById('productId').textContent=proof.product_id;
+        document.getElementById('remainingStock').innerHTML=`${number(proof.remaining_stock)} ${status(proof.stock_is_zero)}`;
+        document.getElementById('noNegative').innerHTML=status(proof.no_negative_stock);
+        document.getElementById('totalOrders').textContent=number(proof.total_orders);
+        document.getElementById('uniqueUsers').innerHTML=`${number(proof.unique_users)} ${status(proof.unique_users===50)}`;
+        document.getElementById('maxPerUser').innerHTML=`${number(proof.max_order_per_user)} ${status(proof.max_order_per_user<=1)}`;
+        document.getElementById('duplicateUsers').innerHTML=`${number(proof.duplicate_users)} ${status(proof.duplicate_users===0)}`;
+      }
+      renderLoadTest('readMetrics',data.loadTests.read);
+      renderLoadTest('writeMetrics',data.loadTests.write);
+      document.getElementById('updated').textContent=`อัปเดตล่าสุด ${new Date(data.generatedAt).toLocaleString('th-TH')}`;
+    } catch(error){ document.getElementById('updated').textContent=`โหลดข้อมูลไม่สำเร็จ: ${error.message}`; }
+  }
+  refresh(); setInterval(refresh,2500);
+</script>
+</body>
+</html>

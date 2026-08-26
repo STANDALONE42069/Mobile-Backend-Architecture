@@ -24,6 +24,7 @@ docker compose up --build -d
 
 - API: http://localhost:8080
 - Health check: http://localhost:8080/health
+- Operations Dashboard: http://localhost:3001/dashboard
 - Bull Board: http://localhost:3001/admin/queues
 - Cache metrics: http://localhost:8080/api/v1/products/cache-metrics
 
@@ -70,6 +71,24 @@ k6 run -e PAGE=1 -e LIMIT=10 loadtest/read-load.js
 
 ```bash
 k6 run -e PRODUCT_ID=p-1001 loadtest/write-load.js
+```
+
+เมื่อรัน k6 ผ่าน Docker ให้ mount `loadtest/results` เพื่อส่งผล Req/s, p95 และ Error Rate เข้า Operations Dashboard:
+
+```bash
+docker run --rm --network mobilebackendarchitecture_default \
+  -v "$PWD/loadtest:/scripts:ro" \
+  -v "$PWD/loadtest/results:/results" \
+  grafana/k6:latest run \
+  -e BASE_URL=http://nginx -e RESULTS_DIR=/results \
+  -e PAGE=1 -e LIMIT=10 /scripts/read-load.js
+
+docker run --rm --network mobilebackendarchitecture_default \
+  -v "$PWD/loadtest:/scripts:ro" \
+  -v "$PWD/loadtest/results:/results" \
+  grafana/k6:latest run \
+  -e BASE_URL=http://nginx -e RESULTS_DIR=/results \
+  -e PRODUCT_ID=p-1001 /scripts/write-load.js
 ```
 
 ตรวจ data integrity หลัง queue ทำงานเสร็จ:

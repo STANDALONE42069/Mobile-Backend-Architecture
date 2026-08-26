@@ -1,0 +1,17 @@
+{
+  "testType": "write",
+  "generatedAt": "2026-08-26T04:15:26.879Z",
+  "target": "http://nginx/api/v1/orders",
+  "productId": "p-1001",
+  "concurrentUsers": 500,
+  "uniqueUsers": 500,
+  "requests": 575,
+  "requestsPerSecond": 175.4596656236346,
+  "p95LatencyMs": 539.2930686999998,
+  "averageLatencyMs": 300.0858329026089,
+  "errorRate": 0,
+  "acceptedOrders": 500,
+  "rejectedDuplicates": 75,
+  "checksPassed": 1500,
+  "checksFailed": 0
+}

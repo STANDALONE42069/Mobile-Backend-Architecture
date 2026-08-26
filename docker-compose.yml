@@ -69,8 +69,19 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MONITOR_PORT: 3001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-flashsale}
+      POSTGRES_USER: ${POSTGRES_USER:-flashsale}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flashsale_password}
+      LOADTEST_RESULTS_DIR: /app/loadtest-results
+      DASHBOARD_PRODUCT_ID: p-1001
+    volumes:
+      - ./loadtest/results:/app/loadtest-results:ro
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     restart: unless-stopped
 

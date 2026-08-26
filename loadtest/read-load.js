@@ -4,6 +4,7 @@ import { check, sleep } from 'k6';
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 const PAGE = Number(__ENV.PAGE || 1);
 const LIMIT = Number(__ENV.LIMIT || 10);
+const RESULTS_DIR = __ENV.RESULTS_DIR || 'loadtest/results';
 
 export const options = {
   scenarios: {
@@ -32,4 +33,32 @@ export default function () {
   });
 
   sleep(0.1);
+}
+
+export function handleSummary(data) {
+  const requests = data.metrics.http_reqs?.values;
+  const latency = data.metrics.http_req_duration?.values;
+  const failures = data.metrics.http_req_failed?.values;
+  const checks = data.metrics.checks?.values;
+
+  const summary = {
+    testType: 'read',
+    generatedAt: new Date().toISOString(),
+    target: `${BASE_URL}/api/v1/products?page=${PAGE}&limit=${LIMIT}`,
+    concurrentUsers: 1000,
+    page: PAGE,
+    limit: LIMIT,
+    requests: requests?.count || 0,
+    requestsPerSecond: requests?.rate || 0,
+    p95LatencyMs: latency?.['p(95)'] || 0,
+    averageLatencyMs: latency?.avg || 0,
+    errorRate: failures?.rate || 0,
+    checksPassed: checks?.passes || 0,
+    checksFailed: checks?.fails || 0,
+  };
+
+  return {
+    stdout: `\nREAD LOAD SUMMARY\n${JSON.stringify(summary, null, 2)}\n`,
+    [`${RESULTS_DIR}/read-summary.json`]: JSON.stringify(summary, null, 2),
+  };
 }
