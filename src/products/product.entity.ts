@@ -8,6 +8,9 @@ export class Product {
   @Column({ type: 'varchar', length: 255 })
   name!: string;
 
+  @Column({ type: 'text' })
+  description!: string;
+
   @Column({ type: 'integer' })
   price!: number;
 
@@ -20,4 +23,3 @@ export class Product {
   @Column({ name: 'is_flash_sale_active', type: 'boolean' })
   isFlashSaleActive!: boolean;
 }
-

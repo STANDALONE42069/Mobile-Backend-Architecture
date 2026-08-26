@@ -27,6 +27,8 @@ docker compose up --build -d
 - Bull Board: http://localhost:3001/admin/queues
 - Cache metrics: http://localhost:8080/api/v1/products/cache-metrics
 
+ข้อมูลสินค้าเริ่มต้นอ่านจาก `database/products-seed.json` โดยกำหนด `remainingStock` เริ่มต้นเท่ากับ `availableStock`
+
 ## API examples
 
 ```bash
@@ -75,4 +77,3 @@ docker compose exec postgres psql -U flashsale -d flashsale -c "SELECT COUNT(*),
 docker compose down -v
 docker compose up --build -d
 ```
-

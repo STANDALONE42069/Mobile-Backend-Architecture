@@ -5,6 +5,7 @@ CREATE TYPE order_status AS ENUM ('CONFIRMED');
 CREATE TABLE products (
   product_id VARCHAR(32) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
+  description TEXT NOT NULL,
   price INTEGER NOT NULL CHECK (price >= 0),
   available_stock INTEGER NOT NULL CHECK (available_stock >= 0),
   remaining_stock INTEGER NOT NULL CHECK (remaining_stock >= 0),
@@ -23,13 +24,23 @@ CREATE TABLE orders (
 
 CREATE INDEX idx_orders_product_id ON orders(product_id);
 
-INSERT INTO products (product_id, name, price, available_stock, remaining_stock, is_flash_sale_active)
+INSERT INTO products (
+  product_id,
+  name,
+  description,
+  price,
+  available_stock,
+  remaining_stock,
+  is_flash_sale_active
+)
 SELECT
-  'p-' || (1000 + n),
-  CASE WHEN n = 1 THEN 'Limited Edition Sneaker' ELSE 'Flash Sale Product ' || n END,
-  CASE WHEN n = 1 THEN 2990 ELSE 1000 + (n * 50) END,
-  CASE WHEN n = 1 THEN 50 ELSE 100 END,
-  CASE WHEN n = 1 THEN 50 ELSE 100 END,
-  TRUE
-FROM generate_series(1, 20) AS n;
-
+  item->>'productId',
+  item->>'name',
+  item->>'description',
+  (item->>'price')::NUMERIC::INTEGER,
+  (item->>'availableStock')::INTEGER,
+  (item->>'availableStock')::INTEGER,
+  (item->>'isFlashSaleActive')::BOOLEAN
+FROM jsonb_array_elements(
+  pg_read_file('/docker-entrypoint-initdb.d/products-seed.json')::JSONB
+) AS item;
