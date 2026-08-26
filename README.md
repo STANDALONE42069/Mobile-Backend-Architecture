@@ -66,6 +66,12 @@ k6 run loadtest/loadtest.js
 k6 run -e PAGE=1 -e LIMIT=10 loadtest/read-load.js
 ```
 
+รันเฉพาะ Write Load ด้วยผู้ใช้ไม่ซ้ำ 500 คน แย่งสินค้า `p-1001` และยิงซ้ำพร้อมกันบางส่วน:
+
+```bash
+k6 run -e PRODUCT_ID=p-1001 loadtest/write-load.js
+```
+
 ตรวจ data integrity หลัง queue ทำงานเสร็จ:
 
 ```bash
