@@ -8,9 +8,8 @@ Backend สำหรับระบบ Flash Sale ที่รองรับก
 Client / k6
     |
   Nginx (least connections)
-    |-- NestJS API 1
-    |-- NestJS API 2
-    `-- NestJS API 3
+    |-- NestJS API 1-3
+    `-- NestJS API 4-6
               |-- Redis: cache + atomic reservation
               |-- BullMQ: asynchronous order queue --> Worker
               `-- PostgreSQL: source of truth
@@ -90,6 +89,19 @@ docker run --rm --network mobilebackendarchitecture_default \
   -e BASE_URL=http://nginx -e RESULTS_DIR=/results \
   -e PRODUCT_ID=p-1001 /scripts/write-load.js
 ```
+
+### Latest verified clean-state result
+
+ทดสอบหลัง `docker compose down -v` โดยใช้ k6 อยู่ใน Docker network เดียวกับระบบ:
+
+| Test | Workload | Requests | Throughput | p95 | Threshold | Error |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Read | 1,000 concurrent VUs / 30s | 195,862 | 6,502.10 req/s | 124.11 ms | < 200 ms | 0% |
+| Write | 500 unique users / 575-request burst | 575 | 1,996.53 req/s | 158.73 ms | < 300 ms | 0% |
+
+Write throughput วัดเฉพาะช่วง order burst 288 ms ไม่รวมขั้นตอนเตรียม JWT แบบ sequential ใน `setup()` ผลเต็มถูกบันทึกใน `loadtest/results` และแสดงบน Operations Dashboard
+
+Read path ใช้ Redis Lua lookup หนึ่ง round-trip, ส่ง cached JSON โดยไม่ parse/serialize ซ้ำ และ batch cache metrics ทุก 250 ms เพื่อลด persistent writes ส่วน Nginx ใช้ worker อัตโนมัติและกระจายโหลดไปยัง API 6 replicas
 
 ตรวจ data integrity หลัง queue ทำงานเสร็จ:
 

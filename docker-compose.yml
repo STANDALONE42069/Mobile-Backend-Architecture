@@ -12,6 +12,12 @@ services:
         condition: service_healthy
       backend-3:
         condition: service_healthy
+      backend-4:
+        condition: service_healthy
+      backend-5:
+        condition: service_healthy
+      backend-6:
+        condition: service_healthy
     restart: unless-stopped
 
   backend-1: &backend
@@ -44,6 +50,15 @@ services:
     <<: *backend
 
   backend-3:
+    <<: *backend
+
+  backend-4:
+    <<: *backend
+
+  backend-5:
+    <<: *backend
+
+  backend-6:
     <<: *backend
 
   worker:

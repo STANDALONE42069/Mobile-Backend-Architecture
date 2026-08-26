@@ -18,6 +18,7 @@ export const options = {
   thresholds: {
     http_req_failed: ['rate<0.01'],
     http_req_duration: ['p(95)<200'],
+    checks: ['rate>0.9999'],
   },
 };
 
@@ -52,6 +53,11 @@ export function handleSummary(data) {
     requestsPerSecond: requests?.rate || 0,
     p95LatencyMs: latency?.['p(95)'] || 0,
     averageLatencyMs: latency?.avg || 0,
+    p95WaitingMs: data.metrics.http_req_waiting?.values['p(95)'] || 0,
+    p95SendingMs: data.metrics.http_req_sending?.values['p(95)'] || 0,
+    p95ReceivingMs: data.metrics.http_req_receiving?.values['p(95)'] || 0,
+    p95BlockedMs: data.metrics.http_req_blocked?.values['p(95)'] || 0,
+    p95ConnectingMs: data.metrics.http_req_connecting?.values['p(95)'] || 0,
     errorRate: failures?.rate || 0,
     checksPassed: checks?.passes || 0,
     checksFailed: checks?.fails || 0,

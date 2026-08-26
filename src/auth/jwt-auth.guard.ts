@@ -10,12 +10,12 @@ export interface AuthenticatedRequest extends Request {
 export class JwtAuthGuard implements CanActivate {
   constructor(private readonly jwt: JwtService) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
     if (type !== 'Bearer' || !token) throw new UnauthorizedException('Missing bearer token');
     try {
-      const payload = await this.jwt.verifyAsync<{ userId: string }>(token);
+      const payload = this.jwt.verify<{ userId: string }>(token);
       request.user = { userId: payload.userId };
       return true;
     } catch {
@@ -23,4 +23,3 @@ export class JwtAuthGuard implements CanActivate {
     }
   }
 }
-

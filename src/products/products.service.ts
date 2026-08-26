@@ -8,22 +8,44 @@ import { Product } from './product.entity';
 @Injectable()
 export class ProductsService implements OnModuleDestroy {
   private readonly redis = new Redis(redisConnection());
+  private pendingCacheHits = 0;
+  private pendingCacheMisses = 0;
+  private metricFlushPromise: Promise<void> | null = null;
+  private readonly metricFlushTimer: NodeJS.Timeout;
+  private readonly getCachedPageScript = `
+    local version = redis.call('GET', KEYS[1]) or '0'
+    local cacheKey = 'products:v' .. version .. ':page:' .. ARGV[1] .. ':limit:' .. ARGV[2]
+    local value = redis.call('GET', cacheKey)
+    if value then
+      return { value, cacheKey }
+    end
+    return { false, cacheKey }
+  `;
 
-  constructor(@InjectRepository(Product) private readonly repository: Repository<Product>) {}
+  constructor(@InjectRepository(Product) private readonly repository: Repository<Product>) {
+    this.metricFlushTimer = setInterval(() => {
+      void this.queueMetricFlush();
+    }, 250);
+    this.metricFlushTimer.unref();
+  }
 
   async list(page: number, limit: number) {
     if (page < 1 || limit < 1 || limit > 100) {
       throw new BadRequestException('page must be >= 1 and limit must be between 1 and 100');
     }
-    const version = (await this.redis.get('products:cache:version')) ?? '1';
-    const key = `products:v${version}:page:${page}:limit:${limit}`;
-    const cached = await this.redis.get(key);
+    const [cached, key] = await this.redis.eval(
+      this.getCachedPageScript,
+      1,
+      'products:cache:version',
+      page,
+      limit,
+    ) as [string | null, string];
     if (cached) {
-      await this.redis.hincrby('metrics:product-cache', 'hits', 1);
-      return JSON.parse(cached) as unknown;
+      this.pendingCacheHits += 1;
+      return cached;
     }
 
-    await this.redis.hincrby('metrics:product-cache', 'misses', 1);
+    this.pendingCacheMisses += 1;
     const [data, total] = await this.repository.findAndCount({
       order: { productId: 'ASC' },
       skip: (page - 1) * limit,
@@ -34,11 +56,13 @@ export class ProductsService implements OnModuleDestroy {
       data,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
-    await this.redis.set(key, JSON.stringify(response), 'EX', 60);
-    return response;
+    const serialized = JSON.stringify(response);
+    await this.redis.set(key, serialized, 'EX', 60);
+    return serialized;
   }
 
   async cacheMetrics() {
+    await this.queueMetricFlush();
     const values = await this.redis.hmget('metrics:product-cache', 'hits', 'misses');
     const hits = Number(values[0] ?? 0);
     const misses = Number(values[1] ?? 0);
@@ -46,8 +70,37 @@ export class ProductsService implements OnModuleDestroy {
     return { status: 'success', hits, misses, hitRatio: total ? hits / total : 0 };
   }
 
+  private queueMetricFlush() {
+    if (!this.metricFlushPromise) {
+      this.metricFlushPromise = this.flushCacheMetrics().finally(() => {
+        this.metricFlushPromise = null;
+      });
+    }
+    return this.metricFlushPromise;
+  }
+
+  private async flushCacheMetrics() {
+    const hits = this.pendingCacheHits;
+    const misses = this.pendingCacheMisses;
+    this.pendingCacheHits = 0;
+    this.pendingCacheMisses = 0;
+    if (!hits && !misses) return;
+
+    try {
+      const pipeline = this.redis.pipeline();
+      if (hits) pipeline.hincrby('metrics:product-cache', 'hits', hits);
+      if (misses) pipeline.hincrby('metrics:product-cache', 'misses', misses);
+      await pipeline.exec();
+    } catch {
+      this.pendingCacheHits += hits;
+      this.pendingCacheMisses += misses;
+    }
+  }
+
   async onModuleDestroy() {
+    clearInterval(this.metricFlushTimer);
+    if (this.metricFlushPromise) await this.metricFlushPromise;
+    await this.queueMetricFlush();
     await this.redis.quit();
   }
 }
-

@@ -13,22 +13,28 @@ const writeLatency = new Trend('write_latency', true);
 const writeErrors = new Rate('write_errors');
 const acceptedOrders = new Counter('accepted_orders');
 const rejectedDuplicates = new Counter('rejected_duplicates');
+const writeStartedAt = new Trend('write_started_at');
+const writeCompletedAt = new Trend('write_completed_at');
 
 http.setResponseCallback(expectedStatuses(200, 202, 409));
 
 export const options = {
   scenarios: {
     write_load: {
-      executor: 'constant-vus',
+      executor: 'per-vu-iterations',
       vus: 500,
-      duration: '1s',
-      gracefulStop: '5s',
+      iterations: 1,
+      maxDuration: '30s',
     },
   },
   thresholds: {
-    http_req_failed: ['rate<0.01'],
+    'http_req_failed{scenario:write_load}': ['rate<0.01'],
     'http_req_duration{scenario:write_load}': ['p(95)<300'],
+    write_latency: ['p(95)<300'],
+    write_errors: ['rate<0.001'],
+    checks: ['rate>0.9999'],
   },
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
 };
 
 export function setup() {
@@ -49,7 +55,7 @@ export function setup() {
 }
 
 export default function (data) {
-  const userIndex = exec.scenario.iterationInTest;
+  const userIndex = exec.vu.idInTest - 1;
   const token = data.tokens[userIndex];
   sleep(0.25);
   const requestCount = userIndex < 25 ? 3 : userIndex < 50 ? 2 : 1;
@@ -62,9 +68,12 @@ export default function (data) {
       tags: { endpoint: 'orders' },
     },
   }));
+  writeStartedAt.add(Date.now());
   const responses = http.batch(requests);
+  const completedAt = Date.now();
 
   for (const response of responses) {
+    writeCompletedAt.add(completedAt);
     writeRequests.add(1);
     writeLatency.add(response.timings.duration);
     writeErrors.add(response.status !== 202 && response.status !== 409);
@@ -76,7 +85,6 @@ export default function (data) {
     'exactly one order queued per user': (items) => items.filter((r) => r.status === 202).length === 1,
     'all duplicate requests rejected': (items) => items.filter((r) => r.status === 409).length === requestCount - 1,
   });
-  sleep(1);
 }
 
 export function handleSummary(data) {
@@ -84,6 +92,9 @@ export function handleSummary(data) {
   const latency = data.metrics.write_latency?.values;
   const failures = data.metrics.write_errors?.values;
   const checks = data.metrics.checks?.values;
+  const burstStartedAt = data.metrics.write_started_at?.values.min || 0;
+  const burstCompletedAt = data.metrics.write_completed_at?.values.max || 0;
+  const burstDurationMs = Math.max(0, burstCompletedAt - burstStartedAt);
 
   const summary = {
     testType: 'write',
@@ -93,7 +104,8 @@ export function handleSummary(data) {
     concurrentUsers: 500,
     uniqueUsers: 500,
     requests: requests?.count || 0,
-    requestsPerSecond: requests?.rate || 0,
+    requestsPerSecond: burstDurationMs ? (requests?.count || 0) / (burstDurationMs / 1000) : 0,
+    burstDurationMs,
     p95LatencyMs: latency?.['p(95)'] || 0,
     averageLatencyMs: latency?.avg || 0,
     errorRate: failures?.rate || 0,

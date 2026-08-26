@@ -1,4 +1,5 @@
-import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, ParseIntPipe, Query, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { ProductsService } from './products.service';
 
 @Controller('api/v1/products')
@@ -6,11 +7,13 @@ export class ProductsController {
   constructor(private readonly products: ProductsService) {}
 
   @Get()
-  list(
+  async list(
     @Query('page', new ParseIntPipe({ optional: true })) page = 1,
     @Query('limit', new ParseIntPipe({ optional: true })) limit = 10,
+    @Res() response: Response,
   ) {
-    return this.products.list(page, limit);
+    const body = await this.products.list(page, limit);
+    response.type('application/json').send(body);
   }
 
   @Get('cache-metrics')
@@ -18,4 +21,3 @@ export class ProductsController {
     return this.products.cacheMetrics();
   }
 }
-

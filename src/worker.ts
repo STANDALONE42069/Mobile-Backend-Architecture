@@ -38,8 +38,7 @@ async function bootstrap() {
     concurrency: Number(process.env.WORKER_CONCURRENCY ?? 10),
   });
 
-  worker.on('completed', (job) => console.log(`Job ${job.id} completed`));
-  worker.on('failed', (job, error) => console.error(`Job ${job?.id} failed: ${error.message}`));
+  worker.on('error', (error) => console.error(`Worker error: ${error.message}`));
 
   const shutdown = async () => {
     await worker.close();
