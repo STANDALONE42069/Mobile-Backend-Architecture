@@ -1,12 +1,30 @@
 import 'reflect-metadata';
-import { Job, Worker } from 'bullmq';
+import { Job, UnrecoverableError, Worker } from 'bullmq';
 import Redis from 'ioredis';
 import { DataSource } from 'typeorm';
 import { databaseOptions, redisConnection } from './config';
-import { Order, OrderStatus } from './orders/order.entity';
 import { ORDER_QUEUE } from './orders/orders.service';
 
 type OrderJob = { userId: string; productId: string; reservationKey: string };
+
+const CLAIM_STOCK_SQL = `
+  WITH claimed AS (
+    UPDATE products
+       SET remaining_stock = remaining_stock - 1
+     WHERE product_id = $1 AND is_flash_sale_active = TRUE AND remaining_stock > 0
+    RETURNING product_id
+  )
+  INSERT INTO orders (user_id, product_id, status)
+  SELECT $2, product_id, 'CONFIRMED'::order_status FROM claimed
+  RETURNING order_id
+`;
+
+const TERMINAL_FAILURES = new Set(['OUT_OF_STOCK_OR_INACTIVE', 'DUPLICATE_ORDER']);
+
+const isUniqueViolation = (error: unknown) => {
+  const candidate = error as { code?: string; driverError?: { code?: string } };
+  return candidate.code === '23505' || candidate.driverError?.code === '23505';
+};
 
 async function bootstrap() {
   const dataSource = new DataSource(databaseOptions(Number(process.env.WORKER_DB_POOL_MAX ?? 10)) as never);
@@ -15,27 +33,31 @@ async function bootstrap() {
 
   const worker = new Worker<OrderJob>(ORDER_QUEUE, async (job: Job<OrderJob>) => {
     const { userId, productId } = job.data;
-    await dataSource.transaction(async (manager) => {
-      const existing = await manager.getRepository(Order).findOneBy({ userId, productId });
-      if (existing) throw new Error('DUPLICATE_ORDER');
+    let inserted: Array<{ order_id: string }>;
+    try {
+      // Single data-modifying CTE: the stock decrement and the order insert commit or roll back together.
+      inserted = await dataSource.query(CLAIM_STOCK_SQL, [productId, userId]) as Array<{ order_id: string }>;
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new UnrecoverableError('DUPLICATE_ORDER');
+      throw error;
+    }
+    if (inserted.length === 0) throw new UnrecoverableError('OUT_OF_STOCK_OR_INACTIVE');
 
-      const result = await manager.query(
-        `UPDATE products
-         SET remaining_stock = remaining_stock - 1
-         WHERE product_id = $1 AND is_flash_sale_active = TRUE AND remaining_stock > 0
-         RETURNING remaining_stock`,
-        [productId],
-      ) as [Array<{ remaining_stock: number }>, number];
-      const [updatedProducts] = result;
-      if (updatedProducts.length === 0) throw new Error('OUT_OF_STOCK_OR_INACTIVE');
-
-      await manager.getRepository(Order).insert({ userId, productId, status: OrderStatus.CONFIRMED });
-    });
     await redis.incr('products:cache:version');
-    return { status: 'CONFIRMED' };
+    return { status: 'CONFIRMED', orderId: inserted[0].order_id };
   }, {
     connection: redisConnection(),
     concurrency: Number(process.env.WORKER_CONCURRENCY ?? 10),
+  });
+
+  // Free the reservation slot only when a legitimate order was lost to a transient fault, so the
+  // user is not locked out for the full TTL. Business-rule rejections keep the slot: releasing it
+  // would let a client's duplicate burst win a second 202 instead of the required 409.
+  worker.on('failed', (job, error) => {
+    if (!job?.data.reservationKey) return;
+    if (TERMINAL_FAILURES.has(error.message)) return;
+    if (job.attemptsMade < (job.opts.attempts ?? 1)) return;
+    void redis.del(job.data.reservationKey);
   });
 
   worker.on('error', (error) => console.error(`Worker error: ${error.message}`));

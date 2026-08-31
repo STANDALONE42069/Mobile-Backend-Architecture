@@ -47,6 +47,7 @@ export class ProductsService implements OnModuleDestroy {
 
     this.pendingCacheMisses += 1;
     const [data, total] = await this.repository.findAndCount({
+      select: ['productId', 'name', 'price', 'availableStock', 'remainingStock', 'isFlashSaleActive'],
       order: { productId: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,
@@ -57,7 +58,7 @@ export class ProductsService implements OnModuleDestroy {
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
     const serialized = JSON.stringify(response);
-    await this.redis.set(key, serialized, 'EX', 60);
+    await this.redis.set(key, serialized, 'EX', 300);
     return serialized;
   }
 

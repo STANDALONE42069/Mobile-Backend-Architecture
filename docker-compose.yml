@@ -12,12 +12,6 @@ services:
         condition: service_healthy
       backend-3:
         condition: service_healthy
-      backend-4:
-        condition: service_healthy
-      backend-5:
-        condition: service_healthy
-      backend-6:
-        condition: service_healthy
     restart: unless-stopped
 
   backend-1: &backend
@@ -32,7 +26,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-development-secret-change-me}
-      API_DB_POOL_MAX: ${API_DB_POOL_MAX:-10}
+      API_DB_POOL_MAX: ${API_DB_POOL_MAX:-20}
       RESERVATION_TTL_SECONDS: ${RESERVATION_TTL_SECONDS:-300}
     depends_on:
       postgres:
@@ -52,22 +46,13 @@ services:
   backend-3:
     <<: *backend
 
-  backend-4:
-    <<: *backend
-
-  backend-5:
-    <<: *backend
-
-  backend-6:
-    <<: *backend
-
   worker:
     build: .
     command: ["node", "dist/worker.js"]
     environment:
       <<: *app-env
-      WORKER_DB_POOL_MAX: ${WORKER_DB_POOL_MAX:-10}
-      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-10}
+      WORKER_DB_POOL_MAX: ${WORKER_DB_POOL_MAX:-20}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-20}
     depends_on:
       postgres:
         condition: service_healthy

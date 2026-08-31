@@ -19,6 +19,8 @@ export class OrdersService implements OnModuleDestroy {
     try {
       const job = await this.queue.add('purchase', { userId, productId, reservationKey }, {
         jobId: `${productId}__${userId}`,
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 200 },
         removeOnComplete: { age: 3600, count: 5000 },
         removeOnFail: { age: 86400, count: 10000 },
       });

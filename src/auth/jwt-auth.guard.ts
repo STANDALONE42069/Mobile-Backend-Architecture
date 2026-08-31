@@ -1,8 +1,8 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Request } from 'express';
+import { FastifyRequest } from 'fastify';
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends FastifyRequest {
   user: { userId: string };
 }
 
@@ -12,7 +12,8 @@ export class JwtAuthGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
+    const authHeader = request.headers.authorization;
+    const [type, token] = (typeof authHeader === 'string' ? authHeader : '').split(' ');
     if (type !== 'Bearer' || !token) throw new UnauthorizedException('Missing bearer token');
     try {
       const payload = this.jwt.verify<{ userId: string }>(token);
